@@ -1,110 +1,91 @@
 package com.coworking.cowork.controller;
 
+import com.coworking.cowork.dto.EspacioRequestDTO;
+import com.coworking.cowork.dto.EspacioResponseDTO;
 import com.coworking.cowork.service.EspacioService;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
-import com.coworking.cowork.model.Espacio;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
-import java.util.Optional;
 
-// Aquí se crea el controlador REST que recibirá las solicitudes relacionadas con los espacios.
+// Aquí se reciben las solicitudes HTTP relacionadas con los espacios.
 @RestController
 @RequestMapping("/api/espacios")
 public class EspacioController {
 
-    // Aquí se guarda el servicio que utilizará el controlador.
+    // El controlador delega la lógica del CRUD al servicio de espacios.
     private final EspacioService espacioService;
 
-    // Aquí se recibe el servicio mediante inyección por constructor.
+    // Spring utiliza este constructor para inyectar el servicio.
     public EspacioController(EspacioService espacioService) {
         this.espacioService = espacioService;
     }
 
-    // Aquí se atiende la solicitud GET para listar todos los espacios.
+    // Aquí se consultan todos los espacios con su sede y categoría resumidas.
     @GetMapping
-    public ResponseEntity<List<Espacio>> listarTodos() {
+    public ResponseEntity<List<EspacioResponseDTO>> listarTodos() {
 
-        // Aquí se solicitan al servicio todos los espacios registrados.
-        List<Espacio> espacios = espacioService.listarTodos();
-
-        // Aquí se devuelve la lista de espacios con estado HTTP 200.
-        return ResponseEntity.ok(espacios);
+        return ResponseEntity.ok(espacioService.listarTodos());
     }
 
-    // Aquí se atiende la solicitud GET para buscar un espacio por su identificador.
+    // Aquí se busca un espacio mediante el id recibido en la URL.
     @GetMapping("/{id}")
-    public ResponseEntity<Espacio> buscarPorId(@PathVariable Long id) {
-
-        // Aquí se solicita al servicio buscar el espacio por su identificador.
-        Optional<Espacio> espacio = espacioService.buscarPorId(id);
-
-        // Aquí se valida si el espacio fue encontrado.
-        if (espacio.isPresent()) {
-
-            // Aquí se devuelve el espacio encontrado con estado HTTP 200.
-            return ResponseEntity.ok(espacio.get());
-        }
-
-        // Aquí se devuelve estado HTTP 404 cuando el espacio no existe.
-        return ResponseEntity.notFound().build();
+    public ResponseEntity<EspacioResponseDTO> buscarPorId(@PathVariable Long id) {
+        return espacioService.buscarPorId(id)
+                .map(ResponseEntity::ok)
+                .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
-    // Aquí se atiende la solicitud POST para crear un nuevo espacio.
+    // Aquí se recibe la información necesaria para crear un nuevo espacio.
     @PostMapping
-    public ResponseEntity<Espacio> crear(@RequestBody Espacio espacio) {
+    public ResponseEntity<?> crear(@RequestBody EspacioRequestDTO datos) {
+        try {
+            EspacioResponseDTO espacioCreado = espacioService.crear(datos);
 
-        // Aquí se solicita al servicio guardar el nuevo espacio.
-        Espacio espacioGuardado = espacioService.guardar(espacio);
+            // El estado 201 indica que el espacio fue creado correctamente.
+            return ResponseEntity.status(HttpStatus.CREATED).body(espacioCreado);
+        } catch (IllegalArgumentException error) {
 
-        // Aquí se devuelve el espacio creado con estado HTTP 201.
-        return ResponseEntity.status(HttpStatus.CREATED).body(espacioGuardado);
-    }
-
-    // Aquí se atiende la solicitud PUT para actualizar un espacio existente.
-    @PutMapping("/{id}")
-    public ResponseEntity<Espacio> actualizar(
-            @PathVariable Long id,
-            @RequestBody Espacio espacioActualizado) {
-
-        // Aquí se solicita al servicio actualizar el espacio por su identificador.
-        Optional<Espacio> espacio = espacioService.actualizar(id, espacioActualizado);
-
-        // Aquí se valida si el espacio fue encontrado y actualizado.
-        if (espacio.isPresent()) {
-
-            // Aquí se devuelve el espacio actualizado con estado HTTP 200.
-            return ResponseEntity.ok(espacio.get());
+            // Un id de sede o categoría inexistente hace inválido el cuerpo enviado.
+            return ResponseEntity.badRequest().body(error.getMessage());
         }
-
-        // Aquí se devuelve estado HTTP 404 cuando el espacio no existe.
-        return ResponseEntity.notFound().build();
     }
 
-    // Aquí se atiende la solicitud DELETE para eliminar un espacio por su identificador.
+    // Aquí se actualiza el espacio que corresponde al id recibido.
+    @PutMapping("/{id}")
+    public ResponseEntity<?> actualizar(
+            @PathVariable Long id,
+            @RequestBody EspacioRequestDTO datos) {
+
+        try {
+            return espacioService.actualizar(id, datos)
+                    .map(ResponseEntity::ok)
+                    .orElseGet(() -> ResponseEntity.notFound().build());
+        } catch (IllegalArgumentException error) {
+
+            // Las relaciones enviadas también deben existir durante la actualización.
+            return ResponseEntity.badRequest().body(error.getMessage());
+        }
+    }
+
+    // Aquí se elimina un espacio cuando existe en la base de datos.
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> eliminar(@PathVariable Long id) {
+        if (espacioService.eliminarPorId(id)) {
 
-        // Aquí se solicita al servicio eliminar el espacio por su identificador.
-        boolean eliminado = espacioService.eliminarPorId(id);
-
-        // Aquí se valida si el espacio fue eliminado correctamente.
-        if (eliminado) {
-
-            // Aquí se devuelve estado HTTP 204 cuando la eliminación fue exitosa.
+            // El estado 204 confirma la eliminación y no devuelve contenido.
             return ResponseEntity.noContent().build();
         }
 
-        // Aquí se devuelve estado HTTP 404 cuando el espacio no existe.
+        // Si el espacio solicitado no existe, la API responde con el estado 404.
         return ResponseEntity.notFound().build();
     }
-
 }

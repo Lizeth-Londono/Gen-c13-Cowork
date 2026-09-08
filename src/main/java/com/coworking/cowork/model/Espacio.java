@@ -54,7 +54,8 @@ public class Espacio {
     @JoinColumn(name = "categoria_id", nullable = false)
     private Categoria categoria;
 
-    // Aquí se guarda temporalmente la sede como texto en nombre_sede.
-    @Column(name = "nombre_sede")
-    private String nombreSede;
+    // Aquí se indica que muchos espacios pueden pertenecer a una misma sede.
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "sede_id", nullable = false)
+    private Sede sede;
 }
